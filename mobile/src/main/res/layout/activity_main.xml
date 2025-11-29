@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/main"
+    android:orientation="vertical"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context=".MainActivity"
+    android:baselineAligned="false">
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+        <androidx.media3.ui.PlayerView
+            android:id="@+id/videoView6"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:use_controller="false" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/LinearLayout"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:orientation="vertical"
+        android:layout_weight="1">
+        <androidx.media3.ui.PlayerView
+            android:id="@+id/videoView4"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            app:use_controller="false"
+            app:layout_constraintStart_toStartOf="parent"
+            android:layout_weight="5"/>
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+        <ImageButton
+            android:id="@+id/button4"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:onClick="openSettings"
+            android:src="@drawable/ic_settings"/>
+        <Button
+            android:layout_width="wrap_content"
+            android:layout_weight="10"
+            android:layout_height="wrap_content"
+            android:onClick="openDoor"
+            android:text="Открыть дверь">
+        </Button>
+    </LinearLayout>
+</LinearLayout>
