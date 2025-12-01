@@ -13,8 +13,11 @@ import androidx.media3.ui.PlayerView
 import androidx.core.content.edit
 import org.json.JSONObject
 import java.io.File
+import java.io.FileOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
+import java.nio.file.Files
+
 object AppPreferences {
     private const val PREFS_NAME = "AppPreferences"
     private lateinit var sharedPref: SharedPreferences
@@ -23,7 +26,7 @@ object AppPreferences {
             context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
     }
     var urlCam: String
-        get() = sharedPref.getString("urlCam", "rtsp://192.168.50.60") ?: "rtsp://192.168.50.60"
+        get() = sharedPref.getString("urlCam", "") ?: ""
         set(value) {
             sharedPref.edit { putString("urlCam", value) }
         }
@@ -49,6 +52,7 @@ object AppPreferences {
         }
 }
 class MainActivity : AppCompatActivity() {
+    private var ffmpegPath = ""
     companion object{
         val cams = mutableListOf<Array<String>>()
     }
@@ -67,17 +71,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         //nukewebviewData()
-
-        Thread{
-            if (demon){
-                return@Thread
-            }
-            while (true){
-                demon = true
-                Thread.sleep(4320000)
-                setStreamsRTC()
-            }
-        }.start()
+        startFFmpeg()
     }
 
     override fun onResume() {
@@ -85,7 +79,7 @@ class MainActivity : AppCompatActivity() {
         setStreamsUser()
         Thread{
             setStreamsRTC()
-        }.start()
+        }//.start()
     }
 
     private fun openLogin(){
@@ -105,7 +99,7 @@ class MainActivity : AppCompatActivity() {
     private fun setStreamsUser(){
         var playerView = findViewById<PlayerView>(R.id.videoView6)
         if (AppPreferences.urlCam != "" || AppPreferences.urlCam != " ") {
-            initPlayer(playerView, AppPreferences.urlCam)
+            initPlayer(playerView, "127.0.0.1:1234")
         }else{
             playerView.visibility = View.GONE
         }
@@ -180,6 +174,63 @@ class MainActivity : AppCompatActivity() {
     fun openDoor(view: View) {
         Thread{
             setStreamsRTC()
+        }.start()
+    }
+
+    fun startFFmpeg() {
+        val destinationFile = File(application.filesDir, "ffmpeg")
+        if (destinationFile.exists()) {
+            Log.d("FFmpeg", "FFmpeg execf futable already exists in internal storage.")
+        }else {
+            try {
+                val inputStream = application.assets.open("ffmpeg")
+                val outputStream = FileOutputStream(destinationFile)
+                inputStream.copyTo(outputStream)
+                outputStream.close()
+                inputStream.close()
+                destinationFile.setExecutable(true)
+
+                Log.d(
+                    "FFmpeg",
+                    "FFmpeg executable successfully copied to: ${destinationFile.absolutePath}"
+                )
+
+            } catch (e: Exception) {
+                Log.e("FFmpeg", "Failed to copy FFmpeg asset.", e)
+            }
+        }
+        val command = listOf(
+            destinationFile.absolutePath,
+            "-i",
+            "rtsp://192.168.50.60:554",
+            "-c",
+            "copy",
+            "-f",
+            "mpegts",
+            "udp://127.0.0.1:1234"
+        )
+
+        // Using Thread is fine, but Coroutines are generally better practice in modern Android
+        Thread {
+            try {
+                //Thread.sleep(5000)
+                val process = ProcessBuilder(command)
+                    //.redirectErrorStream(true) // Combines stdout and stderr
+                    .start()
+
+                process.inputStream.bufferedReader().use { reader ->
+                    reader.forEachLine { line ->
+                        Log.i("FFmpeg_Output", line) // Log FFmpeg's output
+                    }
+                }
+
+                val exitCode = process.waitFor()
+                Log.d("FFmpeg", "FFmpeg process finished with exit code: $exitCode")
+
+            } catch (e: Exception) {
+                // Log the exception details
+                Log.e("FFmpeg_Exec", "Error running FFmpeg command.", e)
+            }
         }.start()
     }
 }
