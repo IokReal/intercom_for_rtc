@@ -30,6 +30,9 @@ jobs:
         sudo apt install -y --no-install-recommends coreutils
         mkdir -p $RUNNER_TEMP/keystores
         echo "${{ secrets.KEYSTORE_FILE }}" | base64 --decode > $RUNNER_TEMP/keystores/keystore.jks
+    - name: find apk
+      run: |
+        find  -name "*.apk" -print -quit
     - name: Sign APK
       run: |
         ANDROID_SDK_PATH=$ANDROID_HOME/build-tools/35.0.0/apksigner
