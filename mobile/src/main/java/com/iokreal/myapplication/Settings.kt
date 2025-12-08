@@ -87,11 +87,11 @@ class Settings : AppCompatActivity() {
     }
 
     fun save(view: View) {
-        val spi1 = findViewById<Spinner>(R.id.country_spinner1)
+        val spi1 = findViewById<Spinner>(R.id.country_spinner2)
         Log.d("save", doorList[spi1.selectedItemPosition])
         AppPreferences.idDoor = doorList[spi1.selectedItemPosition]
 
-        val spi2 = findViewById<Spinner>(R.id.country_spinner2)
+        val spi2 = findViewById<Spinner>(R.id.country_spinner1)
         Log.d("save", MainActivity.cams[spi2.selectedItemPosition][1])
         AppPreferences.idCam = MainActivity.cams[spi2.selectedItemPosition][1]
 

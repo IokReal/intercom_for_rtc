@@ -5,18 +5,23 @@ import android.content.Intent
 import android.content.SharedPreferences
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
+import android.util.Base64
 import android.util.Log
 import android.view.View
+import android.widget.LinearLayout
+import androidx.activity.enableEdgeToEdge
 import androidx.media3.common.MediaItem
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import androidx.core.content.edit
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import org.json.JSONObject
 import java.io.File
-import java.io.FileOutputStream
+import java.lang.Long.min
 import java.net.HttpURLConnection
 import java.net.URL
-import java.nio.file.Files
 
 object AppPreferences {
     private const val PREFS_NAME = "AppPreferences"
@@ -52,11 +57,11 @@ object AppPreferences {
         }
 }
 class MainActivity : AppCompatActivity() {
-    private var ffmpegPath = ""
+    private lateinit var relodDemon: Thread
+
     companion object{
         val cams = mutableListOf<Array<String>>()
     }
-    var demon = false
     private lateinit var player: ExoPlayer
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -71,15 +76,18 @@ class MainActivity : AppCompatActivity() {
         }
 
         //nukewebviewData()
-        startFFmpeg()
     }
 
     override fun onResume() {
         super.onResume()
+        enableEdgeToEdge()
+        val windowInsetsController = WindowCompat.getInsetsController(window, window.decorView)
+        windowInsetsController.hide(WindowInsetsCompat.Type.systemBars())
+        windowInsetsController.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         setStreamsUser()
         Thread{
             setStreamsRTC()
-        }//.start()
+        }.start()
     }
 
     private fun openLogin(){
@@ -97,14 +105,18 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setStreamsUser(){
-        var playerView = findViewById<PlayerView>(R.id.videoView6)
-        if (AppPreferences.urlCam != "" || AppPreferences.urlCam != " ") {
-            initPlayer(playerView, "127.0.0.1:1234")
+        val playerView = findViewById<PlayerView>(R.id.videoView6)
+        Log.d("setStreamsUser", AppPreferences.urlCam)
+        if (AppPreferences.urlCam != "" ) {
+            initPlayer(playerView, AppPreferences.urlCam)
         }else{
+            val LinearLayout = findViewById<LinearLayout>(R.id.LinearLayoutVideoView6)
+            LinearLayout.visibility = View.GONE
             playerView.visibility = View.GONE
         }
     }
     private fun setStreamsRTC(){
+        var minTime = 100000000000
         try {
             val connection = URL("https://vc.key.rt.ru/api/v1/cameras?limit=100&offset=0").openConnection() as HttpURLConnection // thx https://github.com/artgl/hass_rtkey/blob/master/custom_components/rtkey/__init__.py
             connection.requestMethod = "GET"
@@ -116,14 +128,24 @@ class MainActivity : AppCompatActivity() {
             val rootObject = JSONObject(jsonString)
             val dataObject = rootObject.getJSONObject("data")
             val itemsArray = dataObject.getJSONArray("items")
+            val length = itemsArray.length()
             cams.clear()
-            for (i in 0 until itemsArray.length()) {
+            for (i in 0 until length) {
                 val itemObject = itemsArray.getJSONObject(i)
-                val id = itemObject.getString("id")
-                val token = itemObject.getString("streamer_token")
-                val name = itemObject.getString("title")
-                val row = arrayOf(name, id, token)
-                cams.add(row)
+                val status = itemObject.getJSONObject("status")
+
+                if (status.getInt("id") == 1){
+                    val id = itemObject.getString("id")
+                    val token = itemObject.getString("streamer_token")
+                    val name = itemObject.getString("title")
+                    val decodedBytes = Base64.decode(token.split(".")[1], Base64.URL_SAFE)
+                    val endAt = String(decodedBytes, Charsets.UTF_8)
+                    val endAtroot = JSONObject(endAt)
+
+                    minTime = min(minTime, endAtroot.getLong("exp"))
+                    val row = arrayOf(name, id, token)
+                    cams.add(row)
+                }
             }
             connection.disconnect()
         } finally {
@@ -151,6 +173,15 @@ class MainActivity : AppCompatActivity() {
                     player.seekTo(newPosition)
                 }
             }
+            relodDemon = Thread{
+                minTime *= 1000
+                minTime -= System.currentTimeMillis()
+                Log.i("relodDemon", "sleep for $minTime")
+                Thread.sleep(minTime)
+                Log.i("relodDemon", "reload")
+                setStreamsRTC()
+            }
+            relodDemon.start()
         }
     }
 
@@ -174,63 +205,6 @@ class MainActivity : AppCompatActivity() {
     fun openDoor(view: View) {
         Thread{
             setStreamsRTC()
-        }.start()
-    }
-
-    fun startFFmpeg() {
-        val destinationFile = File(application.filesDir, "ffmpeg")
-        if (destinationFile.exists()) {
-            Log.d("FFmpeg", "FFmpeg execf futable already exists in internal storage.")
-        }else {
-            try {
-                val inputStream = application.assets.open("ffmpeg")
-                val outputStream = FileOutputStream(destinationFile)
-                inputStream.copyTo(outputStream)
-                outputStream.close()
-                inputStream.close()
-                destinationFile.setExecutable(true)
-
-                Log.d(
-                    "FFmpeg",
-                    "FFmpeg executable successfully copied to: ${destinationFile.absolutePath}"
-                )
-
-            } catch (e: Exception) {
-                Log.e("FFmpeg", "Failed to copy FFmpeg asset.", e)
-            }
-        }
-        val command = listOf(
-            destinationFile.absolutePath,
-            "-i",
-            "rtsp://192.168.50.60:554",
-            "-c",
-            "copy",
-            "-f",
-            "mpegts",
-            "udp://127.0.0.1:1234"
-        )
-
-        // Using Thread is fine, but Coroutines are generally better practice in modern Android
-        Thread {
-            try {
-                //Thread.sleep(5000)
-                val process = ProcessBuilder(command)
-                    //.redirectErrorStream(true) // Combines stdout and stderr
-                    .start()
-
-                process.inputStream.bufferedReader().use { reader ->
-                    reader.forEachLine { line ->
-                        Log.i("FFmpeg_Output", line) // Log FFmpeg's output
-                    }
-                }
-
-                val exitCode = process.waitFor()
-                Log.d("FFmpeg", "FFmpeg process finished with exit code: $exitCode")
-
-            } catch (e: Exception) {
-                // Log the exception details
-                Log.e("FFmpeg_Exec", "Error running FFmpeg command.", e)
-            }
         }.start()
     }
 }
