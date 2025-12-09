@@ -9,6 +9,7 @@ import android.util.Base64
 import android.util.Log
 import android.view.View
 import android.widget.LinearLayout
+import android.widget.Toast
 import androidx.activity.enableEdgeToEdge
 import androidx.media3.common.MediaItem
 import androidx.media3.exoplayer.ExoPlayer
@@ -17,6 +18,7 @@ import androidx.core.content.edit
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import com.iokreal.myapplication.AppPreferences.sharedPref
 import org.json.JSONObject
 import java.io.File
 import java.lang.Long.min
@@ -96,6 +98,7 @@ class MainActivity : AppCompatActivity() {
         val intent = Intent(this, Login::class.java)
         startActivity(intent)
     }
+
     private fun nukewebviewtData() {
         if (AppPreferences.webInited){
             val dataDir = File(applicationInfo.dataDir)
@@ -105,12 +108,14 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setStreamsUser(){
+        val LinearLayout = findViewById<LinearLayout>(R.id.LinearLayoutVideoView6)
         val playerView = findViewById<PlayerView>(R.id.videoView6)
         Log.d("setStreamsUser", AppPreferences.urlCam)
         if (AppPreferences.urlCam != "" ) {
             initPlayer(playerView, AppPreferences.urlCam)
+            LinearLayout.visibility = View.VISIBLE
+            playerView.visibility = View.VISIBLE
         }else{
-            val LinearLayout = findViewById<LinearLayout>(R.id.LinearLayoutVideoView6)
             LinearLayout.visibility = View.GONE
             playerView.visibility = View.GONE
         }
@@ -118,7 +123,8 @@ class MainActivity : AppCompatActivity() {
     private fun setStreamsRTC(){
         var minTime = 100000000000
         try {
-            val connection = URL("https://vc.key.rt.ru/api/v1/cameras?limit=100&offset=0").openConnection() as HttpURLConnection // thx https://github.com/artgl/hass_rtkey/blob/master/custom_components/rtkey/__init__.py
+            val connection = URL("https://vc.key.rt.ru/api/v1/cameras?limit=100&offset=0").openConnection() as HttpURLConnection
+                                            // thx https://github.com/artgl/hass_rtkey/blob/master/custom_components/rtkey/__init__.py
             connection.requestMethod = "GET"
             connection.connectTimeout = 5000
             connection.readTimeout = 5000
@@ -204,7 +210,30 @@ class MainActivity : AppCompatActivity() {
     }
     fun openDoor(view: View) {
         Thread{
-            setStreamsRTC()
+            var status = ""
+            try {
+                val connection = URL("https://household.key.rt.ru/api/v2/app/devices/${AppPreferences.idDoor}/open").openConnection() as HttpURLConnection
+                connection.requestMethod = "POST"
+                connection.connectTimeout = 4000
+                connection.readTimeout = 4000
+                connection.setRequestProperty("Authorization", AppPreferences.key)
+
+                val code = connection.responseCode
+                if (code == 200) {
+                    status = "Открыто"
+                } else if (code == 401) {
+                    status = "Ключ устарел, требуется повторный вход"
+                    AppPreferences.key = ""
+                } else {
+                    status = "Ошибка: $code"
+                }
+                connection.disconnect()
+            } catch (e: Exception) {
+                status = "Ошибка сети"
+            }
+            runOnUiThread {
+                Toast.makeText(this@MainActivity, status, Toast.LENGTH_SHORT).show()
+            }
         }.start()
     }
 }

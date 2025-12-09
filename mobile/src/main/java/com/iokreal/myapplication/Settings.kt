@@ -55,6 +55,7 @@ class Settings : AppCompatActivity() {
             connection.requestMethod = "GET"
             connection.connectTimeout = 5000
             connection.readTimeout = 5000
+            //TUDO: нужна обработка отсутствия интернета
             connection.setRequestProperty("Authorization", AppPreferences.key)
             Log.d("setStreamsRTC", connection.responseCode.toString())
             val jsonString = connection.inputStream.bufferedReader().use { it.readText() }
