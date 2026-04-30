@@ -24,6 +24,10 @@ import java.io.File
 import java.lang.Long.min
 import java.net.HttpURLConnection
 import java.net.URL
+import androidx.media3.common.Player
+import androidx.media3.exoplayer.DefaultLoadControl
+import androidx.media3.common.PlaybackException
+import androidx.media3.exoplayer.rtsp.RtspMediaSource
 
 object AppPreferences {
     private const val PREFS_NAME = "AppPreferences"
@@ -192,16 +196,55 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun initPlayer(playerView: PlayerView, url: String) {
-        player = ExoPlayer.Builder(this).build()
+        val loadControl = DefaultLoadControl.Builder()
+            .setBufferDurationsMs(
+                1000,
+                5000,
+                500,
+                500
+            )
+            .build()
 
-        playerView.player = player
+        val newPlayer = ExoPlayer.Builder(this)
+            .setLoadControl(loadControl)
+            .build()
 
-        val mediaItem = MediaItem.fromUri(url)
-        player.setMediaItem(mediaItem)
+        playerView.player?.release()
+        playerView.player = null
+        playerView.player = newPlayer
 
-        player.prepare()
-        player.playWhenReady = true
-        player.volume = 0f
+        if (url.lowercase().startsWith("rtsp")){
+            var mediaItem = RtspMediaSource
+                .Factory()
+                .setForceUseRtpTcp(true)
+                .createMediaSource(MediaItem.fromUri(url))
+            newPlayer.setMediaSource(mediaItem)
+
+        }else{
+            val liveConfig = MediaItem.LiveConfiguration.Builder()
+                .setTargetOffsetMs(2000)
+                .setMinPlaybackSpeed(1.0f)
+                .setMaxPlaybackSpeed(1.1f)
+                .build()
+
+            val mediaItem: MediaItem = MediaItem.Builder()
+                .setUri(url)
+                .setLiveConfiguration(liveConfig)
+                .build()
+            newPlayer.setMediaItem(mediaItem)
+        }
+
+        newPlayer.addListener(object : Player.Listener {
+            override fun onPlayerError(error: PlaybackException) {
+                Log.e("ExoPlayer", "Ошибка плеера: ${error.message}")
+                newPlayer.prepare() // Переподготовка при ошибке
+                newPlayer.play()
+            }
+        })
+
+        newPlayer.prepare()
+        newPlayer.playWhenReady = true
+        newPlayer.volume = 0f
     }
     fun openSettings(view: View) {
         Log.d("MainActivity", "open Settings")

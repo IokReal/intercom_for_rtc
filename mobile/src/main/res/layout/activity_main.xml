@@ -16,11 +16,11 @@
         android:layout_height="0dp"
         android:layout_weight="1">
         <androidx.media3.ui.PlayerView
+            app:use_controller="false"
             android:id="@+id/videoView6"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            app:layout_constraintStart_toStartOf="parent"
-            app:use_controller="false" />
+            app:layout_constraintStart_toStartOf="parent"/>
     </LinearLayout>
 
     <LinearLayout
@@ -30,10 +30,10 @@
         android:orientation="vertical"
         android:layout_weight="1">
         <androidx.media3.ui.PlayerView
+            app:use_controller="false"
             android:id="@+id/videoView4"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            app:use_controller="false"
             app:layout_constraintStart_toStartOf="parent"
             android:layout_weight="5"/>
     </LinearLayout>
