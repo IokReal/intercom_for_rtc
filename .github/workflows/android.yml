@@ -22,11 +22,11 @@ jobs:
         run: chmod +x gradlew
 
       - name: Build with Gradle
-        run: ./gradlew assembleRelease
+        run: ./gradlew assembleDebug
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: apk-artifact
-          path: mobile/build/outputs/apk/release/mobile-release-unsigned.apk
+          path: mobile/build/outputs/apk/debug/mobile-debug.apk
           compression-level: 5
