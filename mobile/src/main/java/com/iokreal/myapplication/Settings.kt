@@ -3,102 +3,125 @@ package com.iokreal.myapplication
 import android.os.Bundle
 import android.util.Log
 import android.view.View
-import android.widget.Spinner
-import androidx.appcompat.app.AppCompatActivity
 import android.widget.ArrayAdapter
 import android.widget.EditText
-import com.iokreal.myapplication.MainActivity
+import android.widget.Spinner
+import android.widget.Toast
+import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 
 class Settings : AppCompatActivity() {
-    val camList = mutableListOf<String>()
-    val camListNames = mutableListOf<String>()
 
-    val doorList = mutableListOf<String>()
-    val doorListNames = mutableListOf<String>()
+    private lateinit var camSpinner: Spinner
+    private lateinit var doorSpinner: Spinner
+    private lateinit var urlEditText: EditText
+
+    private val doors = mutableListOf<Door>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         AppPreferences.init(this)
         setContentView(R.layout.activity_settings)
 
-        val editTextText = findViewById<EditText>(R.id.editTextText)
-        editTextText.setText(AppPreferences.urlCam)
+        camSpinner = findViewById(R.id.country_spinner1)
+        doorSpinner = findViewById(R.id.country_spinner2)
+        urlEditText = findViewById(R.id.editTextText)
 
-        Thread{
-            initCams()
-        }.start()
-        Thread{
-            initDoors()
-        }.start()
+        urlEditText.setText(AppPreferences.urlCam)
+
+        setupCamsSpinner()
+        loadDoors()
     }
-    private fun initCams(){
-        val spi = findViewById<Spinner>(R.id.country_spinner1)
-        camList.clear()
-        for (i in 0 until MainActivity.cams.size) {
-            Log.d("initCams", MainActivity.cams[i][1])
-            camList.add(MainActivity.cams[i][0])
-        }
-        val adapter = ArrayAdapter(
-            this,
-            android.R.layout.simple_spinner_item,
-            camList
-        )
+
+    private fun setupCamsSpinner() {
+        val camNames = MainActivity.cams.map { it.name }
+        val adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, camNames)
         adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
-        spi.adapter = adapter
+        camSpinner.adapter = adapter
+
+        val savedIndex = MainActivity.cams.indexOfFirst { it.id == AppPreferences.idCam }
+        if (savedIndex >= 0) {
+            camSpinner.setSelection(savedIndex)
+        }
     }
-    private fun initDoors(){
-        try {
-            val connection = URL("https://household.key.rt.ru/api/v2/app/devices/intercom").openConnection() as HttpURLConnection // thx https://github.com/artgl/hass_rtkey/blob/master/custom_components/rtkey/__init__.py
+
+    private fun loadDoors() {
+        lifecycleScope.launch {
+            val loadedDoors = withContext(Dispatchers.IO) { fetchDoors() }
+            if (loadedDoors == null) {
+                Toast.makeText(this@Settings, "Не удалось загрузить список дверей", Toast.LENGTH_SHORT).show()
+                return@launch
+            }
+
+            doors.clear()
+            doors.addAll(loadedDoors)
+
+            val adapter = ArrayAdapter(
+                this@Settings,
+                android.R.layout.simple_spinner_item,
+                doors.map { it.name }
+            )
+            adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+            doorSpinner.adapter = adapter
+
+            val savedIndex = doors.indexOfFirst { it.id == AppPreferences.idDoor }
+            if (savedIndex >= 0) {
+                doorSpinner.setSelection(savedIndex)
+            }
+        }
+    }
+
+    private fun fetchDoors(): List<Door>? {
+        var connection: HttpURLConnection? = null
+        return try {
+            connection = URL("https://household.key.rt.ru/api/v2/app/devices/intercom")
+                .openConnection() as HttpURLConnection
             connection.requestMethod = "GET"
             connection.connectTimeout = 5000
             connection.readTimeout = 5000
-            //TUDO: нужна обработка отсутствия интернета
             connection.setRequestProperty("Authorization", AppPreferences.key)
-            Log.d("setStreamsRTC", connection.responseCode.toString())
+
+            if (connection.responseCode != 200) {
+                Log.e("Settings", "Doors API error: ${connection.responseCode}")
+                return null
+            }
+
             val jsonString = connection.inputStream.bufferedReader().use { it.readText() }
-            val rootObject = JSONObject(jsonString)
-            val dataObject = rootObject.getJSONObject("data")
-            val itemsArray = dataObject.getJSONArray("devices")
-            doorList.clear()
-            doorListNames.clear()
-            if (itemsArray.length() > 0){
-                for (i in 0 until itemsArray.length()) {
-                    val itemObject = itemsArray.getJSONObject(i)
-                    val id = itemObject.getString("id")
-                    val name = itemObject.getString("name_by_company")
-                    doorList.add(id)
-                    doorListNames.add(name)
-                }
-            }
-        } finally {
-            runOnUiThread {
-                val spi = findViewById<Spinner>(R.id.country_spinner2)
-                val adapter = ArrayAdapter(
-                    this,
-                    android.R.layout.simple_spinner_item,
-                    doorListNames
+            val itemsArray = JSONObject(jsonString)
+                .getJSONObject("data")
+                .getJSONArray("devices")
+
+            List(itemsArray.length()) { i ->
+                val item = itemsArray.getJSONObject(i)
+                Door(
+                    id = item.getString("id"),
+                    name = item.getString("name_by_company")
                 )
-                adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
-                spi.adapter = adapter
             }
+        } catch (e: Exception) {
+            Log.e("Settings", "Failed to load doors", e)
+            null
+        } finally {
+            connection?.disconnect()
         }
     }
 
     fun save(view: View) {
-        val spi1 = findViewById<Spinner>(R.id.country_spinner2)
-        Log.d("save", doorList[spi1.selectedItemPosition])
-        AppPreferences.idDoor = doorList[spi1.selectedItemPosition]
+        doors.getOrNull(doorSpinner.selectedItemPosition)?.let { selectedDoor ->
+            AppPreferences.idDoor = selectedDoor.id
+        }
 
-        val spi2 = findViewById<Spinner>(R.id.country_spinner1)
-        Log.d("save", MainActivity.cams[spi2.selectedItemPosition][1])
-        AppPreferences.idCam = MainActivity.cams[spi2.selectedItemPosition][1]
+        MainActivity.cams.getOrNull(camSpinner.selectedItemPosition)?.let { selectedCam ->
+            AppPreferences.idCam = selectedCam.id
+        }
 
-        val editTextText = findViewById<EditText>(R.id.editTextText)
-        Log.d("save", editTextText.text.toString())
-        AppPreferences.urlCam = editTextText.text.toString()
+        AppPreferences.urlCam = urlEditText.text.toString().trim()
         finish()
     }
 }

@@ -42,6 +42,7 @@ android {
 }
 
 dependencies {
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
     implementation("androidx.media3:media3-exoplayer:1.9.0-beta01")
     implementation("androidx.media3:media3-exoplayer-dash:1.9.0-beta01")
     implementation("androidx.media3:media3-ui:1.9.0-beta01")
